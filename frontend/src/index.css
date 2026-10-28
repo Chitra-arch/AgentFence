@@ -1,0 +1,56 @@
+@tailwind base; @tailwind components; @tailwind utilities;
+:root { --ease: cubic-bezier(.22, 1, .36, 1); }
+html { scrollbar-color: #6C5636 #090907; }
+body { @apply bg-ink text-fg font-sans antialiased;
+  background-image: radial-gradient(60rem 26rem at 50% -8%, rgba(185,157,115,.09), transparent 70%); background-attachment: fixed; }
+::selection { background: #B99D73; color: #090907; }
+:focus-visible { outline: 2px solid #B99D73; outline-offset: 2px; }
+
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes toast-in { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { to { opacity: 0; transform: translateX(16px); } }
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+.page-enter { animation: rise .35s var(--ease) both; }
+.toast { animation: toast-in .3s var(--ease) both; }
+.toast-out { animation: toast-out .35s var(--ease) both; }
+.skeleton { border-radius: .5rem; background: linear-gradient(90deg, rgba(108,86,54,.15) 25%, rgba(185,157,115,.2) 50%, rgba(108,86,54,.15) 75%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+.lift { transition: transform .2s var(--ease), border-color .2s, box-shadow .2s; }
+.lift:hover { transform: translateY(-2px); box-shadow: 0 10px 28px -14px rgba(185,157,115,.4); }
+
+/* Sequenced entrance: blocks rise, table rows fade (transforms on <tr> are unreliable). */
+.stagger > * { animation: rise .45s var(--ease) both; }
+.stagger-rows > tr { animation: fade .35s ease both; }
+.stagger > :nth-child(2), .stagger-rows > :nth-child(2) { animation-delay: 50ms; }
+.stagger > :nth-child(3), .stagger-rows > :nth-child(3) { animation-delay: 100ms; }
+.stagger > :nth-child(4), .stagger-rows > :nth-child(4) { animation-delay: 150ms; }
+.stagger > :nth-child(5), .stagger-rows > :nth-child(5) { animation-delay: 200ms; }
+.stagger > :nth-child(6), .stagger-rows > :nth-child(6) { animation-delay: 250ms; }
+.stagger > :nth-child(n+7), .stagger-rows > :nth-child(n+7) { animation-delay: 300ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; transition-duration: .01ms !important; }
+}
+
+/* ---- Visual effects ---- */
+@keyframes drift { to { transform: translate(6rem, 4rem) scale(1.18); } }
+@keyframes shine { to { background-position: 200% center; } }
+@keyframes floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@keyframes blink { 50% { opacity: 0; } }
+.aurora { position: absolute; width: 38rem; height: 38rem; border-radius: 9999px; filter: blur(90px); opacity: .26; }
+.a1 { background: #B99D73; top: -14rem; left: -10rem; animation: drift 18s ease-in-out infinite alternate; }
+.a2 { background: #6C5636; bottom: -16rem; right: -8rem; animation: drift 22s ease-in-out infinite alternate-reverse; }
+.shine { background: linear-gradient(100deg, #B99D73 0%, #EDE5D8 40%, #B99D73 70%); background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shine 6s linear infinite; }
+.float { animation: floaty 6s ease-in-out infinite; }
+.caret { display: inline-block; width: .5ch; animation: blink 1s steps(1) infinite; color: #B99D73; }
+.draw { stroke-dasharray: 100; stroke-dashoffset: 100; animation: draw .8s ease-out .1s forwards; }
+.grid-bg { background-image: linear-gradient(rgba(108,86,54,.2) 1px, transparent 1px), linear-gradient(90deg, rgba(108,86,54,.2) 1px, transparent 1px); background-size: 48px 48px; -webkit-mask-image: radial-gradient(ellipse at center, #000 25%, transparent 72%); mask-image: radial-gradient(ellipse at center, #000 25%, transparent 72%); }
+.glow { position: relative; overflow: hidden; }
+.glow > * { position: relative; }
+.glow::before { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s; background: radial-gradient(280px circle at var(--mx, 50%) var(--my, -50%), rgba(185,157,115,.16), transparent 60%); }
+.glow:hover::before { opacity: 1; }
+.sheen { position: relative; overflow: hidden; }
+.sheen::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.35) 50%, transparent 70%); transform: translateX(-120%); transition: transform .6s var(--ease); }
+.sheen:hover::after { transform: translateX(120%); }

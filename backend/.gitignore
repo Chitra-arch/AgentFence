@@ -1,0 +1,28 @@
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Database files
+*.db
+
+# Node.js
+node_modules/
+dist/
+.vite/
+
+# Logs and coverage
+*.log
+coverage/
+
+# OS files
+.DS_Store
+Thumbs.db
