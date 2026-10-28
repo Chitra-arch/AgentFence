@@ -65,3 +65,30 @@ UI: landing page, particle network, animated policy-gate illustration, typewrite
 Not done / not verified: Alembic migrations (tables are created at startup), auth rate limiting, frontend Vitest tests,
 Playwright end-to-end tests, deployment, audit date filter, React Hook Form/Zod/shadcn (plain controlled forms used instead).
 The backend tests and the frontend build were written without network access and have not been run yet.
+
+## 📸 Screenshots
+
+### 1. Dashboard Overview
+The main AgentFence dashboard provides an overview of the AI agent security monitoring environment.
+
+![AgentFence Dashboard Overview](screenshots/01-dashboard-overview.png)
+
+### 2. Dashboard Analytics
+Visualize policy evaluation metrics and security activity through the dashboard analytics.
+
+![AgentFence Dashboard Analytics](screenshots/02-dashboard-analytics.png)
+
+### 3. Dashboard Activity
+Review recent activity and monitor AI agent action events.
+
+![AgentFence Dashboard Activity](screenshots/03-dashboard-activity.png)
+
+### 4. Policy Management
+Inspect and manage policies that determine whether AI agent actions are allowed or denied.
+
+![AgentFence Policy Management](screenshots/04-policy-management.png)
+
+### 5. Audit Logs
+Review recorded action evaluations to support traceability and auditing.
+
+![AgentFence Audit Logs](screenshots/05-audit-logs.png)
