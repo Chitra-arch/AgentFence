@@ -1,0 +1,17 @@
+
+{
+  "rewrites": [
+    {
+      "source": "/api",
+      "destination": "https://agentfence.onrender.com/api"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://agentfence.onrender.com/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
