@@ -5,7 +5,8 @@ import { Download, Play, Plus, Trash2 } from 'lucide-react'
 import { api, download, type Policy, type Rule } from './api'
 import { useAuth, useWs } from './auth'
 import { Aurora, FenceDiagram, Particles, ResultSeal } from './fx'
-import { Badge, btn, btnPrimary, card, Empty, ErrorBox, fmt, glowMove, input, Loading, Logo, Spinner, SplitBar, Stat, useToast } from './ui'
+import { ActionBars, Donut, Kpi, NoData, Panel, StackedBars } from './charts'
+import { Badge, btn, btnPrimary, card, Empty, ErrorBox, fmt, glowMove, input, Loading, Logo, Spinner, SplitBar, useToast } from './ui'
 
 const TOOLS = ['read_document', 'query_sample_records', 'delete_record']
 const CLASSES = ['public', 'internal', 'confidential']
@@ -56,24 +57,67 @@ export function AuthPage() {
     </div>)
 }
 
+const RANGES = [7, 14, 30]
+const pct = (n: number, d: number) => (d ? `${Math.round((n / d) * 100)}%` : '—')
+type SortKey = 'name' | 'runs' | 'denied' | 'rate'
+
 export function Dashboard() {
   const { wsId } = useWs(); const enabled = !!wsId
+  const [sp, setSp] = useSearchParams()
+  const days = RANGES.includes(Number(sp.get('days'))) ? Number(sp.get('days')) : 14
+  const [sort, setSort] = useState<SortKey>('runs')
   const runs = useQuery({ queryKey: ['runs', wsId], queryFn: () => api.runs(wsId!), enabled })
-  const allowed = useQuery({ queryKey: ['audit', wsId, 'count', 'ALLOW'], queryFn: () => api.audit(wsId!, 'decision=ALLOW&limit=1'), enabled })
-  const denied = useQuery({ queryKey: ['audit', wsId, 'count', 'DENY'], queryFn: () => api.audit(wsId!, 'decision=DENY&limit=1'), enabled })
+  const an = useQuery({ queryKey: ['analytics', wsId, days], queryFn: () => api.analytics(wsId!, days), enabled })
   const scenarios = useQuery({ queryKey: ['scenarios', wsId], queryFn: () => api.scenarios(wsId!), enabled })
   if (runs.isLoading) return <Loading />
   if (runs.error) return <ErrorBox error={runs.error} retry={() => runs.refetch()} />
   if (!runs.data || runs.data.total === 0)
     return <Empty title="No runs yet" action={<Link className={btnPrimary} to="/scenarios"><Play size={14} />Run your first scenario</Link>}>
-      Nothing has been executed in this workspace. Run a seeded scenario to see allow/deny decisions and audit events appear here.</Empty>
+      Nothing has been executed in this workspace. Run a seeded scenario to see allow/deny decisions and analytics appear here.</Empty>
   const names = new Map((scenarios.data ?? []).map((s) => [s.id, s.name]))
+  const a = an.data
+  const total = a ? a.allowed + a.denied + a.failed : 0
+  const rate = (r: { allowed: number; denied: number; failed: number }) => r.denied / Math.max(1, r.allowed + r.denied + r.failed)
+  const byScenario = a ? [...a.by_scenario].sort((x, y) => sort === 'name' ? x.name.localeCompare(y.name) : sort === 'runs' ? y.runs - x.runs : sort === 'denied' ? y.denied - x.denied : rate(y) - rate(x)) : []
+  const sortBtn = (k: SortKey, label: string) => <button className="hover:text-amber" onClick={() => setSort(k)}>{label}{sort === k ? (k === 'name' ? ' ↑' : ' ↓') : ''}</button>
+  const maxReason = Math.max(1, ...(a?.top_reasons.map((r) => r.count) ?? [1]))
   return (
     <div className="stagger space-y-6">
-      <div className="flex items-center justify-between"><h2 className="font-medium">Overview</h2>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div role="group" aria-label="Time range" className="inline-flex overflow-hidden rounded-md border border-brown">
+          {RANGES.map((n) => <button key={n} aria-pressed={days === n} onClick={() => setSp({ days: String(n) })}
+            className={`px-3 py-1.5 text-sm transition-colors ${days === n ? 'bg-amber text-ink' : 'hover:bg-brown/20'}`}>{n} days</button>)}</div>
         <Link className={btnPrimary} to="/scenarios"><Play size={14} />Run a scenario</Link></div>
-      <div className="grid gap-4 sm:grid-cols-3"><Stat label="Runs executed" value={runs.data.total} /><Stat label="Actions allowed" value={allowed.data?.total} /><Stat label="Actions blocked" value={denied.data?.total} /></div>
-      {allowed.data && denied.data && <div className={`${card} p-4`}><div className="mb-2 flex justify-between text-sm"><span>Decision mix</span><span className="text-muted">{allowed.data.total} allowed · {denied.data.total} blocked</span></div><SplitBar a={allowed.data.total} d={denied.data.total} f={0} /></div>}
+
+      {an.isLoading ? <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="skeleton h-24" />)}</div>
+        : an.error ? <ErrorBox error={an.error} retry={() => an.refetch()} /> : a && <>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Kpi label="Runs executed" value={a.runs} hint={`last ${days} days`} /><Kpi label="Actions allowed" value={a.allowed} />
+          <Kpi label="Actions blocked" value={a.denied} /><Kpi label="Block rate" value={total ? Math.round((a.denied / total) * 100) : 0} suffix="%" hint="denied ÷ all actions" /></div>
+        <div className="grid gap-4 lg:grid-cols-3">
+          <Panel title="Decisions over time" hint={`last ${days} days`} className="lg:col-span-2">{total ? <StackedBars data={a.daily} /> : <NoData days={days} />}</Panel>
+          <Panel title="Decision mix">{total ? <Donut allowed={a.allowed} denied={a.denied} failed={a.failed} /> : <NoData days={days} />}</Panel></div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Panel title="Actions by tool">{a.by_action.length ? <ActionBars rows={a.by_action} /> : <NoData days={days} />}</Panel>
+          <Panel title="Top block reasons" hint="denied + failed">{a.top_reasons.length ?
+            <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr><th className={th}>Reason</th><th className={th}>Count</th></tr></thead>
+              <tbody className="stagger-rows">{a.top_reasons.map((r) => <tr key={r.reason} className="border-t border-brown/30"><td className={td}>{r.reason}
+                <div className="mt-1 h-1 rounded bg-ink"><div className="h-1 rounded bg-danger" style={{ width: `${(r.count / maxReason) * 100}%` }} /></div></td>
+                <td className={`${td} tabular-nums`}>{r.count}</td></tr>)}</tbody></table></div> : <p className="py-10 text-center text-sm text-muted">Nothing was blocked in this period.</p>}</Panel></div>
+        <Panel title="Scenario performance" hint="click a header to sort">{byScenario.length ?
+          <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr>
+            <th className={th}>{sortBtn('name', 'Scenario')}</th><th className={th}>{sortBtn('runs', 'Runs')}</th><th className={th}>Allowed</th>
+            <th className={th}>{sortBtn('denied', 'Blocked')}</th><th className={th}>{sortBtn('rate', 'Block rate')}</th><th className={th}>Last run</th></tr></thead>
+            <tbody className="stagger-rows">{byScenario.map((r) => <tr key={r.scenario_id} className="border-t border-brown/30">
+              <td className={td}>{r.name}</td><td className={`${td} tabular-nums`}>{r.runs}</td><td className={`${td} tabular-nums`}>{r.allowed}</td><td className={`${td} tabular-nums`}>{r.denied}</td>
+              <td className={td}><span className="tabular-nums">{pct(r.denied, r.allowed + r.denied + r.failed)}</span></td><td className={td}>{fmt(r.last_run_at)}</td></tr>)}</tbody></table></div> : <NoData days={days} />}</Panel>
+        <Panel title="Policy versions in use" hint="which version made the decisions">{a.by_policy_version.length ?
+          <div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr><th className={th}>Version</th><th className={th}>Allowed</th><th className={th}>Denied</th><th className={th}>Failed</th><th className={th}>Block rate</th></tr></thead>
+            <tbody className="stagger-rows">{a.by_policy_version.map((r) => <tr key={String(r.version)} className="border-t border-brown/30">
+              <td className={td}>{r.version == null ? 'none (fail closed)' : `v${r.version}`}</td><td className={`${td} tabular-nums`}>{r.allowed}</td><td className={`${td} tabular-nums`}>{r.denied}</td>
+              <td className={`${td} tabular-nums`}>{r.failed}</td><td className={`${td} tabular-nums`}>{pct(r.denied, r.allowed + r.denied + r.failed)}</td></tr>)}</tbody></table></div> : <NoData days={days} />}</Panel>
+      </>}
+
       <section><h2 className="mb-2 font-medium">Recent activity</h2>
         <div className={`${card} overflow-x-auto`}><table className="w-full text-sm"><thead><tr><th className={th}>Scenario</th><th className={th}>Status</th><th className={th}>Allowed</th><th className={th}>Denied</th><th className={th}>Started</th></tr></thead>
           <tbody className="stagger-rows">{runs.data.items.map((r) => <tr key={r.id} className="border-t border-brown/30">
@@ -162,7 +206,7 @@ export function Scenarios() {
   const q = useQuery({ queryKey: ['scenarios', wsId], queryFn: () => api.scenarios(wsId!), enabled: !!wsId })
   const run = useMutation({
     mutationFn: (id: string) => api.runScenario(id),
-    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['runs'] }); qc.invalidateQueries({ queryKey: ['audit'] }); qc.invalidateQueries({ queryKey: ['scenarios'] }); nav(`/runs/${r.id}`) },
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['runs'] }); qc.invalidateQueries({ queryKey: ['analytics'] }); qc.invalidateQueries({ queryKey: ['audit'] }); qc.invalidateQueries({ queryKey: ['scenarios'] }); nav(`/runs/${r.id}`) },
     onError: (e) => toast(e instanceof Error ? e.message : 'Run failed', true),
   })
   if (q.isLoading) return <Loading />

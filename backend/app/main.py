@@ -1,10 +1,10 @@
 import csv, io, os, uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 from fastapi import Depends, FastAPI, HTTPException, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 from contextlib import asynccontextmanager
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -209,3 +209,38 @@ def list_runs(wid: uuid.UUID, limit: int = Query(20, ge=1, le=100), offset: int 
     total = db.scalar(select(func.count()).select_from(q.subquery()))
     rows = db.scalars(q.order_by(Run.started_at.desc()).limit(limit).offset(offset))
     return {"total": total, "limit": limit, "offset": offset, "items": [dump(r) for r in rows]}
+
+@app.get("/api/v1/workspaces/{wid}/analytics")
+def analytics(wid: uuid.UUID, days: int = Query(14, ge=1, le=90),
+              db: Session = Depends(get_db), user: User = Depends(current_user)):
+    """Aggregates over the last `days` UTC days (today included), computed from persisted audit events only."""
+    authorize_ws(db, user, wid)
+    since = (datetime.now(timezone.utc) - timedelta(days=days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    where = (AuditEvent.workspace_id == wid, AuditEvent.created_at >= since)
+    cnt = lambda d: func.coalesce(func.sum(case((AuditEvent.decision == d, 1), else_=0)), 0)
+    iso = lambda v: v.isoformat() if hasattr(v, "isoformat") else v
+    trio = lambda r: {"allowed": int(r[-3]), "denied": int(r[-2]), "failed": int(r[-1])}
+
+    day = func.date(AuditEvent.created_at)
+    by_day = {str(r[0]): r for r in db.execute(select(day, cnt("ALLOW"), cnt("DENY"), cnt("FAILED")).where(*where).group_by(day))}
+    daily = []
+    for i in range(days):
+        d = (since + timedelta(days=i)).date().isoformat()
+        daily.append({"date": d, **(trio(by_day[d]) if d in by_day else {"allowed": 0, "denied": 0, "failed": 0})})
+
+    by_action = [{"action": r[0], **trio(r)} for r in db.execute(
+        select(AuditEvent.action, cnt("ALLOW"), cnt("DENY"), cnt("FAILED")).where(*where).group_by(AuditEvent.action))]
+    by_scenario = [{"scenario_id": r[0], "name": r[1], "runs": int(r[2]), "last_run_at": iso(r[3]), **trio(r[4:])} for r in db.execute(
+        select(Scenario.id, Scenario.name, func.count(func.distinct(Run.id)), func.max(Run.started_at), cnt("ALLOW"), cnt("DENY"), cnt("FAILED"))
+        .select_from(AuditEvent).join(Run, Run.id == AuditEvent.run_id).join(Scenario, Scenario.id == Run.scenario_id)
+        .where(*where).group_by(Scenario.id, Scenario.name))]
+    top_reasons = [{"reason": r[0], "count": int(r[1])} for r in db.execute(
+        select(AuditEvent.reason, func.count()).where(*where, AuditEvent.decision != "ALLOW")
+        .group_by(AuditEvent.reason).order_by(func.count().desc()).limit(5))]
+    by_version = [{"version": r[0], **trio(r)} for r in db.execute(
+        select(AuditEvent.policy_version, cnt("ALLOW"), cnt("DENY"), cnt("FAILED")).where(*where)
+        .group_by(AuditEvent.policy_version).order_by(AuditEvent.policy_version))]
+    runs = db.scalar(select(func.count()).select_from(Run).where(Run.workspace_id == wid, Run.started_at >= since)) or 0
+    return {"days": days, "runs": runs, "allowed": sum(d["allowed"] for d in daily), "denied": sum(d["denied"] for d in daily),
+            "failed": sum(d["failed"] for d in daily), "daily": daily, "by_action": by_action, "by_scenario": by_scenario,
+            "top_reasons": top_reasons, "by_policy_version": by_version}

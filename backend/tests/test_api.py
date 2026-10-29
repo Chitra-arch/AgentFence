@@ -71,3 +71,16 @@ def test_runs_list_scoped(client):
     run(client, ha, sa["Public document access"])
     assert client.get(f"/api/v1/workspaces/{wa}/runs", headers=ha).json()["total"] == 1
     assert client.get(f"/api/v1/workspaces/{wa}/runs", headers=hb).status_code == 404
+
+
+def test_analytics_matches_events_and_is_scoped(client):
+    ha, wa, sa = signup(client, "a@example.com")
+    hb, *_ = signup(client, "b@example.com")
+    run(client, ha, sa["Public document access"]); run(client, ha, sa["Confidential document access"])
+    a = client.get(f"/api/v1/workspaces/{wa}/analytics?days=7", headers=ha).json()
+    assert (a["runs"], a["allowed"], a["denied"], a["failed"]) == (2, 1, 1, 0)
+    assert len(a["daily"]) == 7 and a["daily"][-1]["allowed"] == 1 and a["daily"][-1]["denied"] == 1
+    assert a["by_action"][0]["action"] == "read_document" and len(a["by_scenario"]) == 2
+    assert a["top_reasons"][0]["count"] == 1 and a["by_policy_version"][0]["version"] == 1
+    assert client.get(f"/api/v1/workspaces/{wa}/analytics", headers=hb).status_code == 404
+    assert client.get(f"/api/v1/workspaces/{wa}/analytics?days=0", headers=ha).status_code == 422

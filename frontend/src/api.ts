@@ -6,6 +6,15 @@ export type Scenario = { id: string; name: string; description: string; action_c
 export type Run = { id: string; scenario_id: string; policy_version: number | null; status: string; allowed: number; denied: number; failed: number; started_at: string; finished_at: string | null }
 export type Decision = 'ALLOW' | 'DENY' | 'FAILED'
 export type AuditEvent = { id: string; run_id: string; sequence: number; action: string; resource: string; decision: Decision; reason: string; policy_version: number | null; created_at: string }
+export type DayPoint = { date: string; allowed: number; denied: number; failed: number }
+type Trio = { allowed: number; denied: number; failed: number }
+export type Analytics = {
+  days: number; runs: number; daily: DayPoint[]
+  by_action: (Trio & { action: string })[]
+  by_scenario: (Trio & { scenario_id: string; name: string; runs: number; last_run_at: string | null })[]
+  top_reasons: { reason: string; count: number }[]
+  by_policy_version: (Trio & { version: number | null })[]
+} & Trio
 export type Page<T> = { total: number; limit: number; offset: number; items: T[] }
 
 // The token lives in memory only (never localStorage): a refresh logs you out by design.
@@ -43,6 +52,7 @@ export const api = {
   setStatus: (id: string, enabled: boolean) => json<Policy>(`/api/v1/policies/${id}/status`, send('PATCH', { enabled })),
   scenarios: (w: string) => json<Scenario[]>(`/api/v1/workspaces/${w}/scenarios`),
   runScenario: (id: string) => json<Run>(`/api/v1/scenarios/${id}/runs`, { method: 'POST' }),
+  analytics: (w: string, days: number) => json<Analytics>(`/api/v1/workspaces/${w}/analytics?days=${days}`),
   runs: (w: string) => json<Page<Run>>(`/api/v1/workspaces/${w}/runs`),
   run: (id: string) => json<Run>(`/api/v1/runs/${id}`),
   runEvents: (id: string) => json<AuditEvent[]>(`/api/v1/runs/${id}/events`),
