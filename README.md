@@ -15,6 +15,9 @@ agentfence/
 ## Prerequisites
 Python 3.11+, Node 20+ and npm. (PostgreSQL is optional; SQLite is the default.)
 
+##LIVE DEMO
+Live demo: https://agent-fence-nine.vercel.app
+
 ## 1. Start the backend (terminal 1)
 macOS / Linux:
 ```
